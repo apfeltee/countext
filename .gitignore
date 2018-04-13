@@ -1,0 +1,7 @@
+*.exe
+*.o
+*.obj
+*.pdb
+*.i
+*.stackdump
+*.core
