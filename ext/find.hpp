@@ -152,21 +152,28 @@ namespace Find
                         emitme = skipItem(entry.path(), isdir, isfile);
                         if(isdir)
                         {
-                            ispruned = false;
-                            for(auto prunefn: m_prunefuncs)
+                            if(std::filesystem::is_symlink(entry.path()) /* && do not follow links? */)
                             {
-                                if(prunefn(entry.path()) == true)
-                                {
-                                    //iter.pop();
-                                    //iter.no_push();
-                                    iter.disable_recursion_pending();
-                                    ispruned = true;
-                                    emitme = false;
-                                }
+                                iter.disable_recursion_pending();
                             }
-                            if(ispruned == false)
+                            else
                             {
-                                level++;
+                                ispruned = false;
+                                for(auto prunefn: m_prunefuncs)
+                                {
+                                    if(prunefn(entry.path()) == true)
+                                    {
+                                        //iter.pop();
+                                        //iter.no_push();
+                                        iter.disable_recursion_pending();
+                                        ispruned = true;
+                                        emitme = false;
+                                    }
+                                }
+                                if(ispruned == false)
+                                {
+                                    level++;
+                                }
                             }
                         }
                         else if(isfile)

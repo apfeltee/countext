@@ -7,8 +7,7 @@
 
 /* these are needed for msvc */
 #define _CRT_SECURE_NO_WARNINGS
-//#define _CRT_NON_CONFORMING_SWPRINTFS
-//#define _DEBUG
+#define _CRT_NONSTDC_NO_WARNINGS
 
 #if defined(__unix__) || defined(__linux__) || defined(__CYGWIN__) || defined(__CYGWIN32__)
     #include <stdio.h>
@@ -75,26 +74,5 @@
 #endif
 
 #if defined(COE_ISUNKNOWN)
-    #error "your platform might not be supported!"
-#endif
-
-#if defined(COE_ISCYGWIN)
-    #include <boost/filesystem.hpp>
-    namespace std
-    {
-        namespace filesystem
-        {
-            using namespace boost::filesystem;
-        }
-    }
-#elif defined(COE_ISWINDOWS)
-    #include <experimental/filesystem> 
-    #include <filesystem>
-    namespace std
-    {
-        namespace filesystem
-        {
-            using namespace std::experimental::filesystem::v1;
-        }
-    } 
+    #warning "your platform might not be supported!"
 #endif

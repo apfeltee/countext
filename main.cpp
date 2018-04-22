@@ -13,7 +13,6 @@
 #include <functional>
 #include <string>
 #include <cstdio>
-#include "pathtools.h"
 #include "ext/find.hpp"
 #include "ext/optionparser.hpp"
 
@@ -22,14 +21,39 @@
     #define isatty _isatty
 #endif
 
+enum class SortKind
+{
+    Extension,
+    Stem,
+    Filename,
+};
+
 struct Config
 {
+    // what to sort for - default is SortKind::Extension, i.e., file extensions.
+    SortKind sortkind = SortKind::Extension;
+
+    // whether to store file extension case-insensitively
     bool icase = false;
+
+    // whether to read from standard input.
+    // this is handled by '-i' - default behaviour is to read the current directory
     bool readstdin = false;
+
+    // whether to read input from file(s) that contain filenames and/or file paths
+    // this is handled via '-f'
     bool readlistings = false;
+
+    // whether to ignore files that lack a file extension
     bool reject_noext = false;
+
+    // whether to sort values by count. defaults to true
     bool sortvals = true;
+
+    // if '-o' is specified, then the file handle must be closed (deleted, actually)
     bool mustclose = false;
+
+    // where the output is written to. default is std::cout; handled by '-o' flag
     std::ostream* outstream;
 };
 
@@ -71,13 +95,12 @@ class ExtList
             return m_items.end();
         }
 
-        Item byhash(size_t hash)
+        auto byhash(size_t hash)
         {
-            auto iter = std::find_if(m_items.begin(), m_items.end(),  [&](const Item& item) 
+            return std::find_if(m_items.begin(), m_items.end(),  [&](const Item& item) 
             { 
                 return (item.hash == hash);
             });
-            return *iter;
         }
 
         bool contains(size_t hash, size_t& idx)
@@ -124,6 +147,9 @@ class CountFiles
             }
         }
 
+        // this function will attempt to remove '\r\n'.
+        // this only applies to listing files.
+        // it will effectively do nothing if the string does not contain a '\r'
         void fixCR(std::string& str)
         {
             int lastchar;
@@ -165,6 +191,9 @@ class CountFiles
             return *(m_options.outstream);
         }
 
+        // this function is where post-processing (like turning strings lowercase)
+        // happens. new options and/or functionality that directly operate
+        // on the input string should be added here.
         void increase(const std::string& val)
         {
             std::string copy;
@@ -181,28 +210,61 @@ class CountFiles
             }
         }
 
-        void handleItem(const std::string& item)
+        void modeExtension(const std::filesystem::path& item)
         {
-            std::string ext;
-            std::string bname;
-            bname = Path::GetBasename(item);
+            std::string strext;
+            std::string bnamestr;
+            std::filesystem::path bname;
+            bname = item.filename();
+            bnamestr = bname.string();
             /*
             * if the item path is something like "foo/bar/", then
-            * bname is just an empty string, and doesn't contain anything to work with
+            * bname is just an empty string, and doesn't contain anything to work with.
+            * theoretically, this shouldn't happen, though.
             */
-            if(bname.size() > 0)
+            if(bnamestr.size() > 0)
             {
-                if(Path::FileExtension(bname, ext))
+                strext = bname.extension().string();
+                /*
+                * in some super funky cases, the extension might be something
+                * like "." (i.e., "foo."). i don't who or why someone would
+                * name a file like this, but still.
+                */
+                if(strext.size() > 1)
                 {
-                    increase(ext);
+                    increase(strext);
                 }
                 else
                 {
                     if(m_options.reject_noext == false)
                     {
-                        increase(bname);
+                        increase(bname.string());
                     }
                 }
+            }
+        }
+
+        void modeStem(const std::filesystem::path& item)
+        {
+            std::string stemstr;
+            std::filesystem::path stem;
+            stem = item.stem();
+            stemstr = stem.string();
+            increase(stemstr);
+        }
+
+        void handleItem(const std::filesystem::path& item)
+        {
+            switch(m_options.sortkind)
+            {
+                case SortKind::Extension:
+                    return modeExtension(item);
+                case SortKind::Stem:
+                    return modeStem(item);
+                default:
+                    std::cerr << "unimplemented sort kind" << std::endl;
+                    std::exit(1);
+                    break;
             }
         }
 
@@ -212,7 +274,14 @@ class CountFiles
             while(std::getline(infh, line))
             {
                 fixCR(line);
-                handleItem(line);
+                try
+                {
+                    handleItem(line);
+                }
+                catch(std::exception& ex)
+                {
+                    std::cerr << "in walkFilestream: " << ex.what() << std::endl;
+                }
             }
         }
 
@@ -222,7 +291,6 @@ class CountFiles
             fi.skipItemIf([&](const std::filesystem::path& path, bool isdir, bool isfile)
             {
                 (void)path;
-                (void)isdir;
                 (void)isfile;
                 return (isdir == true);
             });
@@ -230,10 +298,10 @@ class CountFiles
             {
                 fi.walk([&](const std::filesystem::path& path)
                 {
-                    handleItem(path.string());
+                    handleItem(path);
                 });
             }
-            catch(std::runtime_error& ex)
+            catch(std::exception& ex)
             {
                 std::cerr << "*ERROR*: directory_iterator exception: " << ex.what() << std::endl;
             }
@@ -319,6 +387,30 @@ int main(int argc, char* argv[])
         opts.outstream = fhptr;
         opts.mustclose = true;
     });
+    prs.on({"-m?", "--mode=?"}, "which sort kind to use ('e': extension, 's': stem, 'f': filename. default: 'e')", [&](const std::string& s)
+    {
+        char modech;
+        modech = std::tolower(s[0]);
+        switch(modech)
+        {
+            case 'x':
+            case 'e':
+                opts.sortkind = SortKind::Extension;
+                break;
+            case 'f': // 'filename'
+            case 'b': // 'basename'
+                opts.sortkind = SortKind::Filename;
+                break;
+            case 'n': // 'name'
+            case 's': // 'stem'
+                opts.sortkind = SortKind::Stem;
+                break;
+            default:
+                std::cerr << "unknown mode '" << modech << "'" << std::endl;
+                std::exit(1);
+                break;
+        }
+    });
     try
     {
         prs.parse(argc, argv);
@@ -331,6 +423,7 @@ int main(int argc, char* argv[])
         {
             if(opts.readstdin == true)
             {
+                //std::cerr << "reading from stdin" << std::endl;
                 if(have_filepipe())
                 {
                     cf.walkFilestream(std::cin);
@@ -368,10 +461,11 @@ int main(int argc, char* argv[])
             }
         }
         cf.printOutput();
+        //std::cerr << "after printOutput" << std::endl;
     }
-    catch(std::runtime_error& e)
+    catch(std::exception& e)
     {
-        std::cerr << "parsing error: " << e.what() << '\n';
+        std::cerr << "error: " << e.what() << '\n';
     }
     if(opts.mustclose)
     {

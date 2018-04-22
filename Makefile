@@ -1,5 +1,6 @@
 
 CXX    = clang++ -std=c++17
+
 CFLAGS += -Wall -Wextra -O3
 IFLAGS +=
 ## uncomment on cygwin!
