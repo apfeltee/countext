@@ -259,7 +259,7 @@ class CountFiles
             * bname is just an empty string, and doesn't contain anything to work with.
             * theoretically, this shouldn't happen, though.
             */
-            if(!bnamestr.empty())
+            if(bnamestr.size() > 0)
             {
                 strext = bname.extension().string();
                 /*
@@ -273,7 +273,7 @@ class CountFiles
                 }
                 else
                 {
-                    if(!m_options.reject_noext)
+                    if(m_options.reject_noext == false)
                     {
                         increase(bname.string());
                     }
@@ -357,7 +357,7 @@ class CountFiles
                 {
                     verbose("current path: %s", checkthis.string().c_str());
                 }
-                return (isdir);
+                return (isdir == true);
             });
 
             fi.pruneIf([&](const std::filesystem::path& checkthis)
@@ -377,7 +377,7 @@ class CountFiles
                         return true;
                     }
                     // then, check if filename (in case of directories, the dirname) is equal ...
-                    if(checkthis.has_parent_path() && ((!prunethis.empty()) && prunethis.has_parent_path()))
+                    if(checkthis.has_parent_path() && ((prunethis.empty() == false) && prunethis.has_parent_path()))
                     {
 
                         if(checkthis.parent_path() == prunethis.parent_path())
@@ -427,11 +427,11 @@ class CountFiles
 
         void printOutput()
         {
-            if(m_options.sortvals && (!m_options.collectonly))
+            if(m_options.sortvals && (m_options.collectonly == false))
             {
                 sort();
             }
-            if(m_options.revoutput && (!m_options.collectonly))
+            if(m_options.revoutput && (m_options.collectonly == false))
             {
                 for(auto it=m_map.rbegin(); it!=m_map.rend(); it++)
                 {
@@ -574,13 +574,13 @@ int main(int argc, char* argv[])
         std::cerr << "error: " << e.what() << '\n';
     }
     CountFiles cf(opts);
-    if((!opts.readstdin) && (prs.size() == 0))
+    if((opts.readstdin == false) && (prs.size() == 0))
     {
         cf.walkDirectory(".");
     }
     else
     {
-        if(opts.readstdin)
+        if(opts.readstdin == true)
         {
             //std::cerr << "reading from stdin" << std::endl;
             if(have_filepipe())
@@ -596,7 +596,7 @@ int main(int argc, char* argv[])
         else if(opts.readlistings)
         {
             auto files = prs.positional();
-            for(const auto& file: files)
+            for(auto file: files)
             {
                 std::fstream fh(file, std::ios::in | std::ios::binary);
                 if(fh.good())
@@ -613,7 +613,7 @@ int main(int argc, char* argv[])
         else
         {
             auto dirs = prs.positional();
-            for(const auto& dir: dirs)
+            for(auto dir: dirs)
             {
                 cf.walkDirectory(dir);
             }
